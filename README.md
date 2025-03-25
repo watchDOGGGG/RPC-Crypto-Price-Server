@@ -10,6 +10,7 @@ This project implements a **decentralized server** using **Hyperswarm, HyperDHT,
 ✅ Established **data storage** using **Hypercore & Hyperbee**.
 ✅ Implemented **periodic price fetching** using **cron jobs**.
 ✅ Supported **retrieval of historical prices**.
+✅ Data encrytpion and signing **using ECDH key pair, AES-256-GCM, ECDSA**.
 
 ## Features Not Achieved
 
@@ -35,7 +36,7 @@ npm install
 To run the Hyperswarm-based server:
 
 ```sh
-node server.js
+npm run server
 ```
 
 ### 3️⃣ Start the Client
@@ -43,7 +44,7 @@ node server.js
 To connect a client to the server:
 
 ```sh
-node client.js
+npm run client
 ```
 
 ---
