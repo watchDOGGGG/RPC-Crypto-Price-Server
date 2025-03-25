@@ -16,6 +16,7 @@ This project implements a **decentralized server** using **Hyperswarm, HyperDHT,
 ❌ Connected clients to the server using **Hyperswarm RPC**.
 ❌ Set up **request rate limiting** per client.
 ❌ Ran **automated tests** to verify functionality.
+❌ Rpc connection.
 
 ## Due to time, hopefully we would have implemented it within an additional 1 hour
 
