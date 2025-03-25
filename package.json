@@ -1,0 +1,28 @@
+{
+  "name": "nodejs-tether-code-interview",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "server": "nodemon src/server.js",
+    "client": "nodemon src/client.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hyperswarm/rpc": "^3.3.2",
+    "axios": "^1.8.4",
+    "b4a": "^1.6.7",
+    "hyperbee": "^2.23.0",
+    "hypercore": "^11.0.48",
+    "hyperdht": "^6.20.1",
+    "hyperswarm": "^4.10.1",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^3.3.2",
+    "node-schedule": "^2.1.1",
+    "nodemon": "^3.1.9"
+  }
+}
