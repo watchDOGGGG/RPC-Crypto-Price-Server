@@ -12,14 +12,14 @@ This project implements a **decentralized server** using **Hyperswarm, HyperDHT,
 ✅ Supported **retrieval of historical prices**.
 ✅ Data encrytpion and signing **using ECDH key pair, AES-256-GCM, ECDSA**.
 
-## Features Not Achieved
+### Features Not Yet Achieved
 
 ❌ Connected clients to the server using **Hyperswarm RPC**.
 ❌ Set up **request rate limiting** per client.
 ❌ Ran **automated tests** to verify functionality.
-❌ Rpc connection.
+❌ Established **RPC connection**.
 
-## Due to time, hopefully we would have implemented it within an additional 1 hour
+---
 
 ## Installation & Setup
 
@@ -49,21 +49,41 @@ npm run client
 
 ---
 
-## Usage
+## How We Would Achieve the Missing Features
 
-- The server fetches the **top 5 cryptocurrency prices** against **USDt** every **30 seconds**.
-- Clients can request:
-  - **Latest Prices**
-  - **Historical Prices** (by providing a time range)
+### **Hyperswarm RPC Connection**
+
+To properly implement **Hyperswarm RPC**, we would:
+
+1. Set up an RPC server using `hyperswarm-rpc`.
+2. Define remote methods (e.g., `getLatestPrices`, `getHistoricalPrices`).
+3. Allow clients to call these methods via an RPC client.
+4. Implement proper request handling and validation.
+
+### **Request Rate Limiting**
+
+To prevent abuse and ensure fair resource distribution, we would:
+
+1. Maintain a record of requests per client using an in-memory store (e.g., a **Map** or **Redis** for persistence).
+2. Set limits (e.g., **5 requests per minute per client**).
+3. Reject requests exceeding the limit with an error message.
+
+### **Automated Tests**
+
+To verify the implementation, we would:
+
+1. Use **Jest** or **Mocha/Chai** to write test cases.
+2. Test key functionalities:
+   - Server startup and client connection.
+   - Fetching and storing cryptocurrency prices.
+   - Rate limiting enforcement.
+   - RPC method responses.
+3. Run tests via:
+
+```sh
+npm test
+```
 
 ---
-
-## Next Steps
-
-We plan to implement the following missing features:
-
-- **Integrating Hyperswarm RPC for client-server communication**.
-- **Setting up request rate limiting per client**.
-- **Running automated tests to verify system functionality**.
 
 Prince randy
