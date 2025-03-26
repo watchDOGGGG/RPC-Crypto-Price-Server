@@ -1,8 +1,8 @@
-# Hyperswarm DHT & RPC Server
+# Hyperswarm DHT & RPC Crypto Price Server
 
 ## Overview
 
-This project implements a **decentralized server** using **Hyperswarm, HyperDHT, and Hyperbee** to fetch and store cryptocurrency price data. The system allows clients to connect via **DHT and Hyperswarm** to request the latest and historical prices.
+This project implements a **decentralized server** using **Hyperswarm, HyperDHT, and Hyperbee** to fetch and store cryptocurrency price data. The system allows clients to connect via **DHT and Hyperswarm RPC** to request the latest and historical prices.
 
 ## Features Implemented
 
@@ -10,14 +10,14 @@ This project implements a **decentralized server** using **Hyperswarm, HyperDHT,
 ✅ Established **data storage** using **Hypercore & Hyperbee**.
 ✅ Implemented **periodic price fetching** using **cron jobs**.
 ✅ Supported **retrieval of historical prices**.
-✅ Data encrytpion and signing **using ECDH key pair, AES-256-GCM, ECDSA**.
+✅ Data encryption and signing **using ECDH key pair, AES-256-GCM, and ECDSA**.
 ✅ Connected clients to the server using **Hyperswarm RPC**.
 
 ### Features Not Yet Achieved
 
 ❌ Set up **request rate limiting** per client.
 ❌ Ran **automated tests** to verify functionality.
-❌ Cache **using redis**
+❌ Implemented **caching using Redis**.
 
 ---
 
@@ -47,13 +47,28 @@ To connect a client to the server:
 npm run client
 ```
 
+Current implementation requries you to copy key from log and paste in the client:
+best practise was to store the key in the hyperbee storage, i had errors and due to time i could not debug real quick
+
+---
+
+## Notes on Connectivity
+
+Due to **firewall issues and time constraints**, I was unable to connect to my local instance, so I had to use **public HyperDHT bootstrap nodes** instead. Below are the bootstrap nodes used:
+
+```js
+const BOOTSTRAP_NODES = [
+  "88.99.3.86@node1.hyperdht.org:49737",
+  "142.93.90.113@node2.hyperdht.org:49737",
+  "138.68.147.8@node3.hyperdht.org:49737",
+];
+```
+
+These are **public HyperDHT bootstrap nodes** that help peers discover each other and connect within the distributed network.
+
 ---
 
 ## How We Would Achieve the Missing Features
-
-### **Hyperswarm RPC Connection**
-
-To properly implement **Hyperswarm RPC**, we would:
 
 ### **Request Rate Limiting**
 
@@ -81,4 +96,6 @@ npm test
 
 ---
 
-Prince randy
+## Author
+
+Prince Randy

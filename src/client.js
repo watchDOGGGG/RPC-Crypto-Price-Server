@@ -1,6 +1,8 @@
 import RPC from "@hyperswarm/rpc";
 import DHT from "hyperdht";
 import crypto from "crypto";
+import Hyperbee from "hyperbee"
+import Hypercore from "hypercore";
 import {
     generateECDHKeys,
     deriveSharedKey,
@@ -9,8 +11,33 @@ import {
     signMessage,
     verifyMessage
 } from './crypto-utils.js';
+import fs from 'fs'
 
 const clientId = crypto.randomBytes(16).toString('hex');
+
+async function getServerPublicKey() {
+    const core = new Hypercore("./db/rpc-client")
+    const db = new Hyperbee(core, { keyEncoding: "utf-8", valueEncoding: "json" })
+    await core.ready()
+
+    let serverKeyEntry = await db.get("server-public-key")
+
+    if (!serverKeyEntry) {
+        if (!fs.existsSync('server-public-key.txt')) {
+            console.error("Error: No stored public key found. Run the server first.")
+            process.exit(1)
+        }
+
+        const fileKeyHex = fs.readFileSync('server-public-key.txt', 'utf8').trim()
+        const serverPublicKey = fileKeyHex
+
+        await core.close()
+        return serverPublicKey
+    }
+
+    await core.close()
+    return serverKeyEntry.value
+}
 
 async function connectToServer(serverPublicKey, options = {}) {
     const { retries = 3, retryDelay = 2000, bootstrapNodes = [] } = options;
@@ -141,7 +168,9 @@ async function getHistoricalPrices(socket, sharedKey, clientId, from, to, pairs 
 
 const main = async () => {
     try {
-        const serverPublicKey = "d18a74a202b95118ac3a20d5d9cc489f30a72292ca75722d4f2cd7eaba43d6e6";
+        const serverPublicKey = await getServerPublicKey()
+        console.log("Retrieved server public key from Hyperbee:", serverPublicKey)
+
         const { socket, rpc, dht, sharedKey, clientId } = await connectToServer(serverPublicKey, {
             retries: 3,
             retryDelay: 3000,

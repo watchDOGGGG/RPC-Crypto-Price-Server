@@ -19,6 +19,7 @@ import {
     signMessage,
     verifyMessage
 } from './crypto-utils.js';
+import fs from 'fs'
 
 const SERVICE_NAME = "crypto-price-service";
 const BOOTSTRAP_NODES = [
@@ -30,7 +31,7 @@ const BOOTSTRAP_NODES = [
 const clientKeys = new Map();
 
 // Initialize storage
-const core = new Hypercore('./db');
+const core = new Hypercore('./db/rpc-server');
 const db = new Hyperbee(core, { keyEncoding: 'utf-8', valueEncoding: 'json' });
 await core.ready();
 console.log("Hyperbee storage initialized.");
@@ -77,6 +78,7 @@ async function startServer() {
     const publicKeyHex = rpcServer.publicKey.toString("hex");
     console.log(`[${SERVICE_NAME}] RPC server listening on public key: ${publicKeyHex}`);
     await db.put("server-public-key", publicKeyHex);
+    fs.writeFileSync('server-public-key.txt', publicKeyHex)
 
     const { ecdhInstance, publicKey: serverECDHPublicKey } = generateECDHKeys();
     console.log(`[${SERVICE_NAME}] Server ECDH public key: ${serverECDHPublicKey}`);
