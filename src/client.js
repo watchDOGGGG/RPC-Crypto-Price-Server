@@ -12,6 +12,8 @@ import {
     verifyMessage
 } from './crypto-utils.js';
 import fs from 'fs'
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 const clientId = crypto.randomBytes(16).toString('hex');
 
@@ -23,12 +25,17 @@ async function getServerPublicKey() {
     let serverKeyEntry = await db.get("server-public-key")
 
     if (!serverKeyEntry) {
-        if (!fs.existsSync('server-public-key.txt')) {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+
+        const filePath = path.join(__dirname, 'server-public-key.txt');
+
+        if (!fs.existsSync(filePath)) {
             console.error("Error: No stored public key found. Run the server first.")
             process.exit(1)
         }
 
-        const fileKeyHex = fs.readFileSync('server-public-key.txt', 'utf8').trim()
+        const fileKeyHex = fs.readFileSync(filePath, 'utf8').trim();
         const serverPublicKey = fileKeyHex
 
         await core.close()
