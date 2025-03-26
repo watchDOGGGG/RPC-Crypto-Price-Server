@@ -47,8 +47,9 @@ To connect a client to the server:
 npm run client
 ```
 
-Current implementation requries you to copy key from log and paste in the client:
-best practise was to store the key in the hyperbee storage, i had errors and due to time i could not debug real quick
+Current implementation requries client to fetch key from sever-public-key.txt file if file is not found in hyperbee storage,
+
+best practise was to store the key in the hyperbee storage and query thr client to fetch the key, i had errors and due to time, i could not debug real quick
 
 ---
 
