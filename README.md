@@ -11,13 +11,13 @@ This project implements a **decentralized server** using **Hyperswarm, HyperDHT,
 ✅ Implemented **periodic price fetching** using **cron jobs**.
 ✅ Supported **retrieval of historical prices**.
 ✅ Data encrytpion and signing **using ECDH key pair, AES-256-GCM, ECDSA**.
+✅ Connected clients to the server using **Hyperswarm RPC**.
 
 ### Features Not Yet Achieved
 
-❌ Connected clients to the server using **Hyperswarm RPC**.
 ❌ Set up **request rate limiting** per client.
 ❌ Ran **automated tests** to verify functionality.
-❌ Established **RPC connection**.
+❌ Cache **using redis**
 
 ---
 
@@ -54,11 +54,6 @@ npm run client
 ### **Hyperswarm RPC Connection**
 
 To properly implement **Hyperswarm RPC**, we would:
-
-1. Set up an RPC server using `hyperswarm-rpc`.
-2. Define remote methods (e.g., `getLatestPrices`, `getHistoricalPrices`).
-3. Allow clients to call these methods via an RPC client.
-4. Implement proper request handling and validation.
 
 ### **Request Rate Limiting**
 

@@ -26,6 +26,11 @@ export async function fetchTopCryptos(db, limit = 5) {
     try {
         console.log(`Fetching top ${limit} cryptocurrencies from CoinGecko`);
         const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1`);
+
+        if (!response.ok) {
+            throw new Error(`CoinGecko API error: ${response.status}`);
+        }
+
         const data = await response.json();
 
         if (data.length) {
@@ -46,6 +51,11 @@ export async function fetchTopExchanges(db, limit = 3) {
     try {
         console.log(`Fetching top ${limit} exchanges from CoinGecko`);
         const response = await fetch(`https://api.coingecko.com/api/v3/exchanges?per_page=${limit}&page=1`);
+
+        if (!response.ok) {
+            throw new Error(`CoinGecko API error: ${response.status}`);
+        }
+
         const data = await response.json();
 
         if (data.length) {
@@ -72,14 +82,43 @@ export async function fetchCryptoPrices(db, cryptos, exchanges) {
         for (const crypto of cryptos) {
             let exchangePrices = [];
             for (const exchange of exchanges) {
-                const response = await fetch(`https://api.coingecko.com/api/v3/exchanges/${exchange.id}/tickers?coin_ids=${crypto.id}&include_exchange_logo=false&depth=1`);
-                const data = await response.json();
-                const ticker = data.tickers.find(t => t.target === "USD");
-                if (ticker) exchangePrices.push(ticker.last);
+                try {
+                    const response = await fetch(`https://api.coingecko.com/api/v3/exchanges/${exchange.id}/tickers?coin_ids=${crypto.id}&include_exchange_logo=false&depth=1`);
+
+                    if (!response.ok) {
+                        console.warn(`API error for ${exchange.id}/${crypto.id}: ${response.status}`);
+                        continue;
+                    }
+
+                    const data = await response.json();
+
+                    // Check if tickers array exists and has items
+                    if (!data.tickers || !Array.isArray(data.tickers) || data.tickers.length === 0) {
+                        console.warn(`No tickers found for ${crypto.id} on ${exchange.id}`);
+                        continue;
+                    }
+
+                    // Try to find USD pair first, then USDT, then USDC
+                    const ticker = data.tickers.find(t => t.target === "USD") ||
+                        data.tickers.find(t => t.target === "USDT") ||
+                        data.tickers.find(t => t.target === "USDC");
+
+                    if (ticker && ticker.last) {
+                        exchangePrices.push(ticker.last);
+                        console.log(`Found price for ${crypto.id} on ${exchange.id}: ${ticker.last} ${ticker.target}`);
+                    }
+                } catch (err) {
+                    console.error(`Error fetching ${crypto.id} price from ${exchange.id}:`, err);
+                }
             }
+
             if (exchangePrices.length > 0) {
                 const avgPrice = exchangePrices.reduce((a, b) => a + b, 0) / exchangePrices.length;
-                prices[crypto.id] = { avgPrice, sources: exchangePrices };
+                prices[crypto.id] = {
+                    avgPrice,
+                    sources: exchangePrices,
+                    timestamp: Date.now()
+                };
             }
         }
 
@@ -105,8 +144,16 @@ export async function storeHistoricalPrices(db, prices) {
 
 export async function getHistoricalPrices(db, from, to) {
     const historicalPrices = {};
-    for await (const { key, value } of db.createReadStream({ gt: `prices:${from}`, lt: `prices:${to}` })) {
-        historicalPrices[key] = JSON.parse(value);
+    try {
+        for await (const { key, value } of db.createReadStream({
+            gt: `prices:${from}`,
+            lt: `prices:${to}`
+        })) {
+            historicalPrices[key] = JSON.parse(value);
+        }
+        return historicalPrices;
+    } catch (err) {
+        console.error("Error retrieving historical prices:", err);
+        return {};
     }
-    return historicalPrices;
 }

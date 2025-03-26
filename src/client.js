@@ -1,95 +1,170 @@
-import Hyperswarm from 'hyperswarm';
-import Crypto from 'crypto';
-import DHT from 'hyperdht';
+import RPC from "@hyperswarm/rpc";
+import DHT from "hyperdht";
+import crypto from "crypto";
 import {
     generateECDHKeys,
-    generateSigningKeys,
-    deriveSharedSecret,
-    createSecureMessage,
-    encryptForPeer,
-    processSecureMessage,
+    deriveSharedKey,
+    encryptMessage,
     decryptMessage,
-} from "./crypto-utils.js";
+    signMessage,
+    verifyMessage
+} from './crypto-utils.js';
 
-const SERVICE_NAME = "client-service";
-const DISCOVERY_TOPIC = "global-discovery-v1";
+const clientId = crypto.randomBytes(16).toString('hex');
 
-// Initialize DHT & Hyperswarm
-const dht = new DHT();
-const swarm = new Hyperswarm();
-const topicHash = Crypto.createHash('sha256').update(DISCOVERY_TOPIC).digest();
+async function connectToServer(serverPublicKey, options = {}) {
+    const { retries = 3, retryDelay = 2000, bootstrapNodes = [] } = options;
+    let lastError;
 
-const { publicKey, privateKey, ecdh } = generateECDHKeys();
-const { publicKey: signPublicKey, privateKey: signPrivateKey } = generateSigningKeys();
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const dht = new DHT({ bootstrap: bootstrapNodes.length > 0 ? bootstrapNodes : undefined });
+            await dht.ready();
+            const seed = crypto.randomBytes(32);
+            const rpc = new RPC({ dht, seed, timeout: 10000 });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const serverKeyBuffer = Buffer.from(serverPublicKey, 'hex');
+            const socket = rpc.connect(serverKeyBuffer, { timeout: 10000 });
+            socket.on('error', (err) => console.error('Socket error:', err));
+            socket.on('close', () => console.log('Socket closed'));
 
-async function startClient() {
-    console.log(`[${SERVICE_NAME}] Starting client...`);
 
-    // Connect to a DHT peer
-    const socket = dht.connect(topicHash);
-    socket.on('open', () => {
-        console.log(`[${SERVICE_NAME}] Connected to server via DHT!`);
+            const { ecdhInstance, publicKey: clientECDHPublicKey } = generateECDHKeys();
 
-        setTimeout(() => {
-            console.log("Requesting latest prices...");
-            const secureMessage = createSecureMessage({ type: "getLatestPrices" }, signPrivateKey);
-            const encryptedMessage = encryptForPeer(secureMessage, publicKey);
-            socket.write(encryptedMessage);
+            const keyExchangeRequest = Buffer.from(JSON.stringify({
+                clientId,
+                clientPublicKey: clientECDHPublicKey
+            }), 'utf-8');
 
-            const from = Date.now() - 3600000; // 1 hour ago
-            const to = Date.now();
-            console.log("Requesting historical prices...");
-            const secureHistoryMessage = createSecureMessage({ type: "getHistoricalPrices", from, to }, signPrivateKey);
-            const encryptedHistoryMessage = encryptForPeer(secureHistoryMessage, publicKey);
-            socket.write(encryptedHistoryMessage);
-        }, 2000); // Wait 2 seconds before sending
-    });
+            const keyExchangeResponse = await socket.request('exchangeKeys', keyExchangeRequest);
+            const { serverPublicKey: serverECDHPublicKey, error } = JSON.parse(keyExchangeResponse.toString('utf-8'));
 
-    socket.on("data", (data) => {
-        const decryptedMessage = decryptMessage(data, privateKey);
-        if (!decryptedMessage) return;
+            if (error) {
+                throw new Error(`Key exchange failed: ${error}`);
+            }
 
-        const { type, payload } = processSecureMessage(decryptedMessage, signPublicKey);
-        console.log(`[${SERVICE_NAME}] Received:`, type, payload);
-    });
 
-    socket.on("error", (err) => console.log(`[${SERVICE_NAME}] DHT error:`, err));
-    socket.on("close", () => console.log(`[${SERVICE_NAME}] Connection closed`));
+            const sharedKey = deriveSharedKey(ecdhInstance, serverECDHPublicKey);
+            console.log("Key exchange completed successfully");
 
-    // Connect via Hyperswarm
-    swarm.join(topicHash, { lookup: true, announce: false });
-    await swarm.flush();
-    console.log(`[${SERVICE_NAME}] Looking for peers on Hyperswarm...`);
 
-    swarm.on("connection", (peer) => {
-        console.log(`[${SERVICE_NAME}] Connected to a peer via Hyperswarm!`);
+            const pingRequest = Buffer.from(JSON.stringify({ message: 'ping' }), 'utf-8');
+            const pingPromise = socket.request('ping', pingRequest);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Ping request timed out')), 10000));
+            const pingResult = await Promise.race([pingPromise, timeoutPromise]);
+            const pingResponse = JSON.parse(pingResult.toString('utf-8'));
 
-        setTimeout(() => {
-            console.log("Requesting latest prices...");
-            const secureMessage = createSecureMessage({ type: "getLatestPrices" }, signPrivateKey);
-            const encryptedMessage = encryptForPeer(secureMessage, publicKey);
-            peer.write(encryptedMessage);
-
-            const from = Date.now() - 3600000;
-            const to = Date.now();
-            console.log("Requesting historical prices...");
-            const secureHistoryMessage = createSecureMessage({ type: "getHistoricalPrices", from, to }, signPrivateKey);
-            const encryptedHistoryMessage = encryptForPeer(secureHistoryMessage, publicKey);
-            peer.write(encryptedHistoryMessage);
-        }, 2000);
-
-        peer.on("data", (data) => {
-            const decryptedMessage = decryptMessage(data, privateKey);
-            if (!decryptedMessage) return;
-
-            const { type, payload } = processSecureMessage(decryptedMessage, signPublicKey);
-            console.log(`[${SERVICE_NAME}] Received from peer:`, type, payload);
-        });
-
-        peer.on("error", err => console.log(`[${SERVICE_NAME}] Peer error:`, err));
-        peer.on("close", () => console.log(`[${SERVICE_NAME}] Peer disconnected`));
-    });
+            return { socket, rpc, dht, sharedKey, clientId };
+        } catch (error) {
+            lastError = error;
+            if (attempt < retries) await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+    }
+    throw new Error(`Failed to connect after ${retries} attempts: ${lastError.message}`);
 }
 
-// Start Client
-startClient();
+async function getLatestPrices(socket, sharedKey, clientId, pairs = []) {
+    try {
+
+        const requestData = JSON.stringify({ pairs });
+
+
+        const encryptedData = encryptMessage(requestData, sharedKey);
+
+
+        const signature = signMessage(encryptedData, sharedKey);
+
+        const secureRequest = {
+            clientId,
+            encryptedData,
+            signature
+        };
+
+        const requestBuffer = Buffer.from(JSON.stringify(secureRequest), 'utf-8');
+        const response = await socket.request('getLatestPrices', requestBuffer);
+        const secureResponse = JSON.parse(response.toString('utf-8'));
+
+        if (secureResponse.error) {
+            throw new Error(secureResponse.error);
+        }
+
+        const { encryptedData: encryptedResponse, signature: responseSignature } = secureResponse;
+
+
+        if (!verifyMessage(encryptedResponse, responseSignature, sharedKey)) {
+            throw new Error("Invalid server signature");
+        }
+
+
+        const decryptedResponse = decryptMessage(encryptedResponse, sharedKey);
+        return JSON.parse(decryptedResponse);
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getHistoricalPrices(socket, sharedKey, clientId, from, to, pairs = []) {
+    try {
+
+        const requestData = JSON.stringify({ pairs, from, to });
+
+        const encryptedData = encryptMessage(requestData, sharedKey);
+
+        const signature = signMessage(encryptedData, sharedKey);
+
+        const secureRequest = {
+            clientId,
+            encryptedData,
+            signature
+        };
+
+        const requestBuffer = Buffer.from(JSON.stringify(secureRequest), 'utf-8');
+        const response = await socket.request('getHistoricalPrices', requestBuffer);
+        const secureResponse = JSON.parse(response.toString('utf-8'));
+
+        if (secureResponse.error) {
+            throw new Error(secureResponse.error);
+        }
+
+        const { encryptedData: encryptedResponse, signature: responseSignature } = secureResponse;
+
+        if (!verifyMessage(encryptedResponse, responseSignature, sharedKey)) {
+            throw new Error("Invalid server signature");
+        }
+
+        const decryptedResponse = decryptMessage(encryptedResponse, sharedKey);
+        return JSON.parse(decryptedResponse);
+    } catch (error) {
+        throw error;
+    }
+}
+
+const main = async () => {
+    try {
+        const serverPublicKey = "d18a74a202b95118ac3a20d5d9cc489f30a72292ca75722d4f2cd7eaba43d6e6";
+        const { socket, rpc, dht, sharedKey, clientId } = await connectToServer(serverPublicKey, {
+            retries: 3,
+            retryDelay: 3000,
+            bootstrapNodes: []
+        });
+
+        console.log("Connected to server with secure channel established");
+
+        const prices = await getLatestPrices(socket, sharedKey, clientId);
+        console.log("Latest prices (securely retrieved):", prices);
+
+        const now = Date.now();
+        const oneDayAgo = now - (24 * 60 * 60 * 1000);
+        const historicalPrices = await getHistoricalPrices(socket, sharedKey, clientId, oneDayAgo, now);
+        console.log("Historical prices (securely retrieved):", historicalPrices);
+
+        socket.destroy();
+        await rpc.destroy();
+        await dht.destroy();
+    } catch (error) {
+        console.error("Error in main:", error.message);
+    }
+};
+
+main();
+export { connectToServer, getLatestPrices, getHistoricalPrices };
